@@ -7,11 +7,11 @@ const db = require('../config/database');
 exports.postsboard = (req, res) => {
     // 시작 페이지 숫자
     const page = req.query.page || 1;
-    const itemsPerPage = 25; // 한 페이지에 출력할 개수
+    const itemsPerPage = 6; // 한 페이지에 출력할 개수
 
     // 게시물들의 개수 확인
     function getTotalPosts(callback) {
-        const getTotalPostsQuery = 'SELECT COUNT(*) AS total FROM posts';
+        const getTotalPostsQuery = 'SELECT COUNT(*) AS total FROM projects';
         db.query(getTotalPostsQuery, (err, totalResult) => {
             if (err) {
                 return callback(err, null);
@@ -25,7 +25,7 @@ exports.postsboard = (req, res) => {
     function getPostsForPage(page, itemsPerPage, callback) {
         const offset = (page - 1) * itemsPerPage;
         // 게시물을 id가 큰 순서대로=최근에 만든 순서대로 출력
-        const query = `SELECT * FROM posts ORDER BY id DESC LIMIT ${itemsPerPage} OFFSET ${offset}`;
+        const query = `SELECT * FROM projects ORDER BY projectId DESC LIMIT ${itemsPerPage} OFFSET ${offset}`;
         db.query(query, (err, results) => {
             if (err) {
                 return callback(err, null);
@@ -47,7 +47,8 @@ exports.postsboard = (req, res) => {
                 console.error('Error fetching posts:', err);
                 return res.status(500).json({ error: 'An error occurred while fetching data' });
             }
-
+            console.log(totalPages);
+            console.log(posts);
             res.json({ totalPages, posts });
         });
     });
@@ -115,7 +116,7 @@ exports.createProjects = async (req, res) => {
     try {
         const fieldId = await getFieldId(selectedField);
         const projectId = await insertProject(projectName, fieldId, selectedArea, description, startDate, endDate, leaderEmail);
-        
+
         for (const data of projectData) {
             const { majorField, subField, numOfRole } = data;
             const majorFieldValue = majorField.split(': ')[1]; // Extract the value after ": "

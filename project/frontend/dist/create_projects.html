@@ -233,7 +233,7 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log('Submission response:', data);
-                    // 여기에 제출 후 처리 로직 추가
+                    window.location.href = `/`;
                 })
                 .catch(error => {
                     console.error('Error submitting data:', error);
