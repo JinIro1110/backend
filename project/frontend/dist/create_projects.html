@@ -15,7 +15,6 @@
 
         <label>분야 ID :</label><br />
         <div id="createCheckboxes"></div>
-        <!-- 여기도 기술 스텍처럼 체크박스로 하는게 좋을듯 -->
 
 
         <label for="area">지역:</label>
@@ -24,7 +23,6 @@
             <option value="부산">부산</option>
             <option value="제주">제주도</option>
         </select><br />
-        <!-- 아직은 모든 지역들 다 안넣었음 -->
 
 
         <label for="description">설명:</label>
@@ -52,17 +50,6 @@
         <br />
 
         <div id="dataContainer"></div>
-
-        <!-- <label for="status">상태:</label>
-        <select id="status" name="status">
-            <option value="ready">준비중</option>
-            <option value="ongoing">진행중</option>
-            <option value="finished">완료</option>
-        </select><br /> -->
-
-        <label for="leader">프로젝트 리더 이메일:</label>
-        <input type="email" id="leader" name="leader" /><br />
-        <!-- 지금은 입력 창이지만 등록하는 사람의 id=email을 들고와서 바로 하는것도 좋을듯 -->
 
         <button type="button" id="submitBtn">등록하기</button>
         <button type="button" id="cancelBtn">취소하기</button>
@@ -99,9 +86,6 @@
         const addDataButton = document.getElementById("addData");
         const dataContainer = document.getElementById("dataContainer");
 
-        // majorfield 체크박스 생성
-        // ...
-
         fetch("/api/project/showMajorFields")
             .then((response) => response.json())
             .then((majorFields) => {
@@ -120,12 +104,10 @@
         majorFieldSelect.addEventListener("change", () => {
             const selectedMajorFieldId = majorFieldSelect.value;
 
-            // 이전에 생성된 subfield 옵션을 제거
             while (subFieldSelect.firstChild) {
                 subFieldSelect.removeChild(subFieldSelect.firstChild);
             }
 
-            // 선택한 majorfield에 해당하는 subfield 가져오기
             fetch(`/api/project/showMajorFields/${selectedMajorFieldId}/subfields`)
                 .then((response) => response.json())
                 .then((subFields) => {
@@ -146,13 +128,11 @@
             }
         });
 
-        // ...
         addDataButton.addEventListener("click", () => {
             const selectedMajorField = majorFieldSelect.options[majorFieldSelect.selectedIndex].text;
             const selectedSubField = subFieldSelect.options[subFieldSelect.selectedIndex].text;
             const numOfRole = numOfRoleInput.value;
 
-            // 데이터 박스 생성
             const dataBox = document.createElement("div");
             dataBox.className = "data-box";
             dataBox.innerHTML = `
@@ -161,7 +141,6 @@
         <p class="num-of-role">인원 수: ${numOfRole}</p>
             `;
 
-            // 삭제 버튼 생성
             const deleteButton = document.createElement("button");
             deleteButton.textContent = "삭제";
             deleteButton.addEventListener("click", () => {
@@ -171,23 +150,30 @@
             dataBox.appendChild(deleteButton);
             dataContainer.appendChild(dataBox);
 
-            // 입력 필드 초기화
             numOfRoleInput.value = 1;
         });
 
-        // 제출 버튼 클릭 시 처리
+        function getJWTFromCookie() {
+            const cookies = document.cookie.split('; ');
+            for (const cookie of cookies) {
+                const [name, value] = cookie.split('=');
+                if (name === 'jwt') {
+                    return value;
+                }
+            }
+            return null;
+        }
+
         const submitButton = document.getElementById("submitBtn");
         submitButton.addEventListener("click", () => {
-            // 사용자 입력 내용 수집
+
             const projectName = document.getElementById("projectName").value;
             const selectedField = document.querySelector('input[name="fields"]:checked').value;
             const selectedArea = document.getElementById("area").value;
             const description = document.getElementById("description").value;
             const startDate = document.getElementById("startDate").value;
             const endDate = document.getElementById("endDate").value;
-            const leaderEmail = document.getElementById("leader").value;
 
-            // 데이터 박스 내용 수집
             const dataBoxes = dataContainer.querySelectorAll(".data-box");
             const projectData = [];
 
@@ -210,7 +196,6 @@
             });
 
 
-            // 전체 데이터를 객체로 구성
             const formData = {
                 projectName: projectName,
                 selectedField: selectedField,
@@ -218,16 +203,16 @@
                 description: description,
                 startDate: startDate,
                 endDate: endDate,
-                leaderEmail: leaderEmail,
                 projectData: projectData
             };
 
-            // formData를 서버로 제출하는 코드 작성
+            const jwtToken = getJWTFromCookie();
             fetch('/api/project/createProjects', {
                 method: 'POST',
                 body: JSON.stringify(formData),
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${jwtToken}`
                 }
             })
                 .then(response => response.json())
@@ -240,10 +225,8 @@
                 });
         });
 
-        // 취소 버튼 클릭 시 처리
         const cancelButton = document.getElementById("cancelBtn");
         cancelButton.addEventListener("click", () => {
-            // 폼 내용 초기화 또는 원하는 작업 수행
         });
     </script>
 

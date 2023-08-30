@@ -46,8 +46,8 @@ exports.register = (req, res) => {
                 res.status(500).json({ message: 'Failed to register' });
                 return;
             }
-
-            techs.forEach(tech => {
+            const techsArray = Array.isArray(techs) ? techs : [techs];
+            techsArray.forEach(tech => {
                 db.query('SELECT id FROM Tech WHERE tech = ?;', [tech], (err, dbTechId) => {
                     if (err) {
                         console.error('Error getting tech ID:', err);
@@ -75,8 +75,7 @@ exports.login = (req, res) => {
     const { email, password } = req.body;
 
     // Users 테이블에서 해당 이메일을 가진 유저 정보 가져오기
-
-    db.query('SELECT Email, Password FROM Users WHERE Email = ?;', [email], (err, userData) => {
+    db.query('SELECT Name, Email, Password, CooperationType, Phone, OnOff FROM Users WHERE Email = ?;', [email], (err, userData) => {
         if (err) {
             console.error('Error fetching user data:', err);
             res.status(500).json({ message: 'Failed to login' });
@@ -88,7 +87,8 @@ exports.login = (req, res) => {
             return;
         }
 
-        const hashedPassword = userData[0].Password;
+        const user = userData[0];
+        const hashedPassword = user.Password;
 
         // 입력된 비밀번호와 해싱된 비밀번호 비교
         bcrypt.compare(password, hashedPassword, (err, result) => {
@@ -99,37 +99,76 @@ exports.login = (req, res) => {
             }
 
             if (result) {
-                // 로그인 성공 시 세션에 사용자 정보 저장
-                req.session.email = email;
-                res.redirect('/');
+                // 유저 인증 완료, JWT 생성
+                const token = jwt.sign(
+                    {
+                        email: user.Email,
+                        name: user.Name,
+                        cooperationType: user.CooperationType,
+                        phone: user.Phone,
+                        onOff: user.OnOff
+                    },
+                    process.env.JWT_SECRET,
+                    {
+                        expiresIn: '1h',     // 토큰 만료 시간
+                        issuer: 'Project-NT'  // 발급자 정보
+                    }
+                );
+                res.cookie('jwt', token, { httpOnly: true, secure: false });
+                res.json({ token }); // 토큰을 클라이언트에게 전송
             } else {
-                res.status(401).json({ message: 'Invalid credentials' });
+                res.status(401).json({ message: '유효하지 않은 정보' });
             }
         });
     });
 };
 
-// 로그아웃
 exports.logout = (req, res) => {
-    req.session.destroy(err => {
-        if (err) {
-            console.error('Error destroying session:', err);
-            res.status(500).json({ message: 'Failed to log out' });
-        } else {
-            res.clearCookie('connect.sid'); // 세션 쿠키 삭제
-            res.status(200).json({ message: 'Logged out successfully' });
-        }
-    });
+    res.clearCookie('jwt'); // 쿠키에서 JWT 제거
+    res.status(200).json({ message: 'Logout successful' });
 };
 
-// 로그인 확인
 exports.checkLogin = (req, res) => {
-    if (req.session.email) {
-        res.json({ loggedIn: true });
+    const token = req.cookies.jwt; // 쿠키에서 토큰을 가져옵니다.
+
+    if (token) {
+        jwt.verify(token, process.env.JWT_SECRET, (err, decodedToken) => {
+            if (err) {
+                res.json({ loggedIn: false });
+            } else {
+                res.json({ loggedIn: true, user: decodedToken }); // 토큰이 유효한 경우 로그인 상태와 사용자 정보를 반환합니다.
+            }
+        });
     } else {
         res.json({ loggedIn: false });
     }
 };
+
+// exports.authenticateJWT = (req, res, next) => {
+//     const token = req.header('Authorization');
+
+//     // 로그인 페이지, 메인 페이지, 회원 가입 페이지에서는 인증 미들웨어를 적용하지 않음
+//     if (req.path === '/login' || req.path === '/' || req.path === '/signup') {
+//         return next();
+//     }
+
+//     if (!token) {
+//         // 로그인되지 않은 사용자에게만 리디렉션
+//         return res.redirect('/login');
+//     }
+
+//     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+//         if (err) {
+//             // 유효하지 않은 토큰인 경우 로그인 페이지로 리디렉션
+//             return res.redirect('/login');
+//         }
+//         req.user = user;
+//         next();
+//     });
+// };
+
+
+
 
 // 아이디 찾기
 exports.searchId = (req, res) => {
@@ -177,7 +216,7 @@ exports.searchPassword = (req, res) => {
                 }
 
                 // 이메일 전송 및 응답 처리
-                const resetLink = `localhost:3000/verifyToken/${token}`;
+                const resetLink = `http://localhost:3000/verifyToken/${token}`;
                 const emailSubject = 'Password Reset';
                 const emailHtml = `Click the following link to reset your password: <a href="${resetLink}">${resetLink}</a>`;
                 authService.sendEmail(user.Email, emailSubject, emailHtml);

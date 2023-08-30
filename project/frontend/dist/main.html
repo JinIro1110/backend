@@ -36,6 +36,8 @@
             padding: 20px;
             text-align: center;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-decoration: none;
+            color: black;
         }
 
         .pagination {
@@ -66,21 +68,23 @@
             function setButtonState(loggedIn) {
                 if (loggedIn) {
                     loginButton.innerText = '로그아웃';
-                    loginButton.addEventListener('click', () => {
+                    loginButton.addEventListener('click', async () => {
                         // 로그아웃 처리
-                        fetch('/api/auth/logout', { method: 'POST' })
-                            .then(response => {
-                                window.location.href = '/';
-                            })
-                            .catch(error => {
-                                console.error('Error logging out:', error);
-                            });
+                        const response = await fetch('/api/auth/logout', { method: 'POST' });
+
+                        if (response.ok) {
+                            localStorage.removeItem('jwt');
+                            // 페이지 새로고침
+                            window.location.reload();
+                        } else {
+                            console.error('Logout failed');
+                        }
                     });
                 } else {
                     loginButton.innerText = '로그인';
                     loginButton.addEventListener('click', () => {
                         // 로그인 페이지로 이동
-                        window.location.href = '/login'; // 로그인 페이지로 이동
+                        window.location.href = '/login';
                     });
                 }
             }
@@ -153,10 +157,12 @@
             document.body.appendChild(paginationContainer);
             function generatePostHTML(post) {
                 // Create a div element to hold the post content
-                const postDiv = document.createElement('div');
+                const postLink = document.createElement('a');
+                postLink.href = `/post/?id=${post.ProjectId}`; // 게시물 지원 페이지 링크 설정
+                postLink.classList.add('post'); // Optional: Apply post styles to the link
 
-                // Populate the div with the post content
-                postDiv.innerHTML = `
+                // Populate the link with the post content
+                postLink.innerHTML = `
         <h2>${post.ProjectName}</h2>
         <p>${post.Description}</p>
         <p>Start Date: ${new Date(post.StartDate).toLocaleDateString()}</p>
@@ -164,7 +170,7 @@
         <p>Leader: ${post.Leader}</p>
     `;
 
-                return postDiv.outerHTML;
+                return postLink.outerHTML;
             }
 
             fetchAndRenderPosts(currentPage);

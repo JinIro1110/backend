@@ -47,8 +47,6 @@ exports.postsboard = (req, res) => {
                 console.error('Error fetching posts:', err);
                 return res.status(500).json({ error: 'An error occurred while fetching data' });
             }
-            console.log(totalPages);
-            console.log(posts);
             res.json({ totalPages, posts });
         });
     });
@@ -100,26 +98,27 @@ exports.showSubFields = (req, res) => {
 
 
 exports.createProjects = async (req, res) => {
-    console.log(req.body);
-    const projectName = req.body.projectName;
-    const selectedField = req.body.selectedField;
-    const selectedMajorField = req.body.majorField;
-    const selectedSubField = req.body.subField;
-    const selectedArea = req.body.selectedArea;
-    const description = req.body.description;
-    const startDate = req.body.startDate;
-    const endDate = req.body.endDate;
-    const leaderEmail = req.body.leaderEmail;
-    const numOfRole = req.body.numOfRole;
-    const projectData = req.body.projectData;
-
     try {
+        console.log(req.headers.authorization);
+        const jwtToken = req.headers.authorization.split(' ')[1]; // 헤더에서 JWT 추출
+        const decodedToken = jwt.verify(jwtToken, 'your_jwt_secret_key'); // JWT 디코딩
+        const leaderEmail = decodedToken.email; // 이메일 추출
+        const projectName = req.body.projectName;
+        const selectedField = req.body.selectedField;
+        const selectedMajorField = req.body.majorField;
+        const selectedSubField = req.body.subField;
+        const selectedArea = req.body.selectedArea;
+        const description = req.body.description;
+        const startDate = req.body.startDate;
+        const endDate = req.body.endDate;
+        const numOfRole = req.body.numOfRole;
+        const projectData = req.body.projectData;
         const fieldId = await getFieldId(selectedField);
         const projectId = await insertProject(projectName, fieldId, selectedArea, description, startDate, endDate, leaderEmail);
 
         for (const data of projectData) {
             const { majorField, subField, numOfRole } = data;
-            const majorFieldValue = majorField.split(': ')[1]; // Extract the value after ": "
+            const majorFieldValue = majorField.split(': ')[1];
             const subFieldValue = subField.split(': ')[1];
             const numOfRoleValue = numOfRole.split(': ')[1];
             const majorFieldId = await getMajorFieldId(majorFieldValue);
@@ -154,7 +153,6 @@ async function getFieldId(selectedField) {
 async function getMajorFieldId(majorField) {
     return new Promise((resolve, reject) => {
         db.query('SELECT MajorFieldId FROM MajorField WHERE MajorField = ?', [majorField], (err, result) => {
-            console.log(result);
             if (err) {
                 reject(err);
             } else {
@@ -203,3 +201,41 @@ async function insertRecruitment(majorFieldId, subFieldId, numOfRole, projectId)
         });
     });
 }
+
+exports.recruitPage = async (req, res) => {
+    const projectId = req.query.id;
+    try {
+        db.query(`
+        SELECT p.ProjectName, p.FieldId, f.Field, p.Area, p.Description, p.StartDate, p.EndDate
+        FROM Projects AS p
+        JOIN Fields AS f ON p.FieldId = f.FieldId
+        WHERE p.ProjectId = ?;
+    `, [projectId], (err, result) => {
+        console.log(result);
+            if (err) {
+                console.error('Error fetching project data:', err);
+                return res.status(500).json({ error: 'Internal server error' });
+            }
+
+            if (result.length === 0) {
+                return res.status(404).json({ error: 'Project not found' });
+            }
+
+            const { ProjectName, Field, Area, Description, StartDate, EndDate } = result[0];
+
+            // Send JSON response
+            res.json({
+                projectId,
+                ProjectName,
+                Field,
+                Area,
+                Description,
+                StartDate,
+                EndDate,
+            });
+        });
+    } catch (error) {
+        console.error('Error fetching recruit page data:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};

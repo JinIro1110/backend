@@ -7,8 +7,10 @@ require('dotenv').config();
 const cookieparser = require('cookie-parser');
 const authRoutes = require('./routes/authRoutes');
 const projectRoutes = require('./routes/projectRoutes');
+const recruitmentRoutes = require('./routes/recruitmentRoutes');
 const db = require('./config/database');
 const cron = require('node-cron');
+const jwt = require('jsonwebtoken');
 
 // 매일 자정에 실행되도록 스케줄을 설정합니다.
 cron.schedule('0 0 * * *', async () => {
@@ -48,6 +50,7 @@ app.use((req, res, next) => {
 });
 app.use('/api/auth', authRoutes);
 app.use('/api/project', projectRoutes);
+app.use('/api/recruit', recruitmentRoutes);
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 
@@ -99,6 +102,7 @@ app.get('/pagination', (req, res) => {
 app.get('/createProject', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/dist/create_projects.html'));
 })
+
 
 // 서버 실행
 const PORT = process.env.PORT || 3000;
