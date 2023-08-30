@@ -8,6 +8,7 @@ const cookieparser = require('cookie-parser');
 const authRoutes = require('./routes/authRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const recruitmentRoutes = require('./routes/recruitmentRoutes');
+const memberRoutes = require('./routes/memberRoutes');
 const db = require('./config/database');
 const cron = require('node-cron');
 const jwt = require('jsonwebtoken');
@@ -51,6 +52,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/project', projectRoutes);
 app.use('/api/recruit', recruitmentRoutes);
+app.use('/api/member', memberRoutes);
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 
