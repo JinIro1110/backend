@@ -25,7 +25,7 @@ exports.register = (req, res) => {
             return;
         }
 
-        db.query('INSERT INTO Users (Name, Email, Password, CooperationType, Phone, Tech, OnOff) VALUES (?, ?, ?, ?, ?, ?, ?);',
+        db.query('INSERT INTO Users (Name, Email, Password, CooperationType, Phone, Techs, OnOff) VALUES (?, ?, ?, ?, ?, ?, ?);',
             [name, email, hashedPassword, type, phone, techs, onOffValue], (err, result) => {
                 if (err) {
                     console.error('Error adding user:', err);
@@ -38,12 +38,11 @@ exports.register = (req, res) => {
     });
 };
 
-
 exports.login = (req, res) => {
     const { email, password } = req.body;
 
     // Users 테이블에서 해당 이메일을 가진 유저 정보 가져오기
-    db.query('SELECT Name, Email, Password, CooperationType, Phone, OnOff FROM Users WHERE Email = ?;', [email], (err, userData) => {
+    db.query('SELECT Name, Email, Password FROM Users WHERE Email = ?;', [email], (err, userData) => {
         if (err) {
             console.error('Error fetching user data:', err);
             res.status(500).json({ message: 'Failed to login' });
@@ -66,33 +65,66 @@ exports.login = (req, res) => {
                 return;
             }
 
+            // ...
             if (result) {
-                // 유저 인증 완료, JWT 생성
-                const token = jwt.sign(
-                    {
-                        email: user.Email,
-                        name: user.Name,
-                        cooperationType: user.CooperationType,
-                        phone: user.Phone,
-                        onOff: user.OnOff
-                    },
-                    process.env.JWT_SECRET,
-                    {
-                        expiresIn: '1h',     // 토큰 만료 시간
-                        issuer: 'Project-NT'  // 발급자 정보
+                // 이전 리프레시 토큰이 존재하는 경우, 데이터베이스에서 삭제 또는 무효화 처리
+                db.query('DELETE FROM Refresh WHERE user_email = ?;', [user.Email], (err, deleteResult) => {
+                    if (err) {
+                        console.error('Error deleting previous refresh token:', err);
+                        res.status(500).json({ message: 'Failed to login' });
+                        return;
                     }
-                );
-                res.cookie('jwt', token, { httpOnly: true, secure: false });
-                res.json({ token }); // 토큰을 클라이언트에게 전송
-            } else {
-                res.status(401).json({ message: '유효하지 않은 정보' });
+
+                    // 유저 인증 완료, JWT 생성
+                    const accessToken = jwt.sign(
+                        {
+                            email: user.Email,
+                            name: user.Name,
+                        },
+                        process.env.JWT_SECRET,
+                        {
+                            expiresIn: '10m',
+                            issuer: 'Project-NT'
+                        }
+                    );
+                    const newRefreshToken = jwt.sign(
+                        {
+                            email: user.Email,
+                            name: user.Name,
+                        },
+                        process.env.JWT_SECRET,
+                        {
+                            expiresIn: '24h',
+                            issuer: 'Project-NT'
+                        }
+                    );
+
+                    // 새로운 리프레시 토큰 데이터베이스에 저장
+                    db.query('INSERT INTO Refresh (user_email, token) VALUES (?, ?);', [user.Email, newRefreshToken], (err, insertResult) => {
+                        if (err) {
+                            console.error('Error inserting new refresh token:', err);
+                            res.status(500).json({ message: 'Failed to login' });
+                            return;
+                        }
+
+                        // 쿠키에 JWT 토큰 설정
+                        res.cookie('accessToken', accessToken, { httpOnly: true, secure: false });
+                        res.cookie('refreshToken', newRefreshToken, { httpOnly: true, secure: false });
+                        // 클라이언트에 토큰 전송
+                        res.json({ accessToken, refreshToken: newRefreshToken });
+                    });
+                });
+            }
+            else {
+                res.status(401).json({ message: 'Invalid credentials' });
             }
         });
     });
 };
 
 exports.logout = (req, res) => {
-    res.clearCookie('jwt'); // 쿠키에서 JWT 제거
+    res.clearCookie('jwt');
+    res.clearCookie('refreshToken');
     res.status(200).json({ message: 'Logout successful' });
 };
 
@@ -112,31 +144,41 @@ exports.checkLogin = (req, res) => {
     }
 };
 
-// exports.authenticateJWT = (req, res, next) => {
-//     const token = req.header('Authorization');
+exports.verifyAccessToken = (req, res, next) => {
+    const accessToken = req.cookies.jwt; // 쿠키에서 액세스 토큰을 가져옵니다.
 
-//     // 로그인 페이지, 메인 페이지, 회원 가입 페이지에서는 인증 미들웨어를 적용하지 않음
-//     if (req.path === '/login' || req.path === '/' || req.path === '/signup') {
-//         return next();
-//     }
-
-//     if (!token) {
-//         // 로그인되지 않은 사용자에게만 리디렉션
-//         return res.redirect('/login');
-//     }
-
-//     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-//         if (err) {
-//             // 유효하지 않은 토큰인 경우 로그인 페이지로 리디렉션
-//             return res.redirect('/login');
-//         }
-//         req.user = user;
-//         next();
-//     });
-// };
-
-
-
+    // 액세스 토큰 검증
+    jwt.verify(accessToken, process.env.JWT_SECRET, (accessTokenErr, decodedToken) => {
+        if (accessTokenErr) {
+            // 액세스 토큰 만료 시 리프레시 토큰 검증 시도
+            const refreshToken = req.cookies.refreshToken;
+            jwt.verify(refreshToken, process.env.JWT_SECRET, (refreshTokenErr, decodedRefreshToken) => {
+                if (refreshTokenErr) {
+                    // 리프레시 토큰까지 만료된 경우: 로그인 페이지로 리디렉션
+                    return res.redirect('/login');
+                } else {
+                    // 새로운 액세스 토큰 발급 및 쿠키 설정
+                    const newAccessToken = jwt.sign(
+                        {
+                            email: decodedRefreshToken.email,
+                            name: decodedRefreshToken.name
+                        },
+                        process.env.JWT_SECRET,
+                        {
+                            expiresIn: '10m',
+                            issuer: 'Project-NT'
+                        }
+                    );
+                    res.cookie('accessToken', newAccessToken, { httpOnly: true, secure: false });
+                    next();
+                }
+            });
+        } else {
+            // 액세스 토큰 유효한 경우
+            next();
+        }
+    });
+};
 
 // 아이디 찾기
 exports.searchId = (req, res) => {
@@ -222,7 +264,14 @@ exports.verifyToken = (req, res) => {
             const decodedToken = jwt.verify(token, process.env.SECRET_KEY);
             const userEmail = decodedToken.email;
 
-            return res.status(200).json({ message: '유효한 토큰입니다.', email: userEmail });
+            db.query('DELETE FROM Auth WHERE token = ?', [token], (deleteErr, deleteResult) => {
+                if (deleteErr) {
+                    console.error('Error deleting token:', deleteErr);
+                    return res.status(500).json({ message: '토큰 삭제 중 에러가 발생했습니다.' });
+                }
+
+                return res.status(200).json({ message: '유효한 토큰입니다.', email: userEmail });
+            });
         });
     } catch (error) {
         console.error('Error verifying token:', error);

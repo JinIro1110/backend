@@ -1,7 +1,7 @@
 const db = require('../config/database');
 
 exports.acceptedMembers = async (req, res) => {
-    const projectId = req.query.id; // Change this to match your query parameter name
+  const projectId = req.query.id; // Change this to match your query parameter name
 
   try {
     db.query(`
@@ -21,3 +21,4 @@ exports.acceptedMembers = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+

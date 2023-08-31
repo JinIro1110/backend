@@ -52,51 +52,6 @@ exports.postsboard = (req, res) => {
     });
 };
 
-exports.showfield = (req, res) => {
-    db.query('SELECT field FROM fields ORDER BY fieldId;', (err, fields) => {
-        if (err) {
-            console.error('Error fetching fields:', err);
-            res.status(500).json({ message: 'Failed to fetch fields' });
-        } else {
-            const fieldValues = fields.map(item => item.field); // 수정: item.fieldName을 item.field로 변경
-            res.status(200).json({ field: fieldValues }); // 수정: fieldNames 대신 field로 변경
-        }
-    });
-}
-
-exports.showMajorFields = (req, res) => {
-    db.query('SELECT MajorFieldId, MajorField FROM MajorField ORDER BY MajorFieldId;', (err, majorFields) => {
-        if (err) {
-            console.error('Error fetching major fields:', err);
-            res.status(500).json({ message: 'Failed to fetch major fields' });
-        } else {
-            const majorFieldValues = majorFields.map(item => ({
-                majorFieldId: item.MajorFieldId,
-                majorField: item.MajorField
-            }));
-            res.status(200).json(majorFieldValues);
-        }
-    });
-};
-
-exports.showSubFields = (req, res) => {
-    const majorFieldId = req.params.majorFieldId;
-
-    db.query('SELECT SubFieldId, SubField FROM SubField WHERE MajorFieldId = ? ORDER BY SubFieldId;', [majorFieldId], (err, subFields) => {
-        if (err) {
-            console.error('Error fetching sub fields:', err);
-            res.status(500).json({ message: 'Failed to fetch sub fields' });
-        } else {
-            const subFieldValues = subFields.map(item => ({
-                subFieldId: item.SubFieldId,
-                subField: item.SubField
-            }));
-            res.status(200).json(subFieldValues);
-        }
-    });
-};
-
-
 exports.createProjects = async (req, res) => {
     try {
         console.log(req.headers.authorization);
@@ -113,7 +68,6 @@ exports.createProjects = async (req, res) => {
         const endDate = req.body.endDate;
         const numOfRole = req.body.numOfRole;
         const projectData = req.body.projectData;
-        const fieldId = await getFieldId(selectedField);
         const projectId = await insertProject(projectName, fieldId, selectedArea, description, startDate, endDate, leaderEmail);
 
         for (const data of projectData) {
@@ -136,47 +90,9 @@ exports.createProjects = async (req, res) => {
     }
 };
 
-
-async function getFieldId(selectedField) {
-    return new Promise((resolve, reject) => {
-        db.query('SELECT FieldId FROM Fields WHERE Field = ?', [selectedField], (err, result) => {
-            if (err) {
-                reject(err);
-            } else {
-                console.log(result);
-                resolve(result[0].FieldId);
-            }
-        });
-    });
-}
-
-async function getMajorFieldId(majorField) {
-    return new Promise((resolve, reject) => {
-        db.query('SELECT MajorFieldId FROM MajorField WHERE MajorField = ?', [majorField], (err, result) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(result[0].MajorFieldId);
-            }
-        });
-    });
-}
-
-async function getSubFieldId(subField) {
-    return new Promise((resolve, reject) => {
-        db.query('SELECT SubFieldId FROM SubField WHERE SubField = ?', [subField], (err, result) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(result[0].SubFieldId);
-            }
-        });
-    });
-}
-
 async function insertProject(projectName, field, area, description, startDate, endDate, leaderEmail) {
     return new Promise((resolve, reject) => {
-        const insertProjectQuery = 'INSERT INTO Projects (ProjectName, FieldId, Area, Description, StartDate, EndDate, Leader) VALUES (?, ?, ?, ?, ?, ?, ?)';
+        const insertProjectQuery = 'INSERT INTO Projects (ProjectName, Field, Area, Description, StartDate, EndDate, Leader, Tech) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
         const projectValues = [projectName, field, area, description, startDate, endDate, leaderEmail];
         db.query(insertProjectQuery, projectValues, (err, result) => {
             if (err) {
@@ -190,8 +106,8 @@ async function insertProject(projectName, field, area, description, startDate, e
 
 async function insertRecruitment(majorFieldId, subFieldId, numOfRole, projectId) {
     return new Promise((resolve, reject) => {
-        const insertRecruitmentQuery = 'INSERT INTO Recruitment (MajorFieldId, SubFieldId, NumOfRole, ProjectId) VALUES (?, ?, ?, ?)';
-        const recruitmentValues = [majorFieldId, subFieldId, numOfRole, projectId];
+        const insertRecruitmentQuery = 'INSERT INTO Recruitment (MajorField, SubField, NumOfRole, ProjectId) VALUES (?, ?, ?, ?)';
+        const recruitmentValues = [majorField, subField, numOfRole, projectId];
         db.query(insertRecruitmentQuery, recruitmentValues, (err, result) => {
             if (err) {
                 reject(err);
@@ -211,7 +127,7 @@ exports.recruitPage = async (req, res) => {
         JOIN Fields AS f ON p.FieldId = f.FieldId
         WHERE p.ProjectId = ?;
     `, [projectId], (err, result) => {
-        console.log(result);
+            console.log(result);
             if (err) {
                 console.error('Error fetching project data:', err);
                 return res.status(500).json({ error: 'Internal server error' });
@@ -239,3 +155,29 @@ exports.recruitPage = async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+exports.startProject = async (req, res) => {
+    const projectId = req.params.projectId;
+
+    // 프로젝트 시작 로직 수행
+
+    try {
+        // 프로젝트 정보 업데이트 (예: 상태를 "ongoing"으로 변경)
+        const updateProjectQuery = 'UPDATE Projects SET Status = "ongoing" WHERE ProjectId = ?';
+        await db.query(updateProjectQuery, [projectId]);
+
+        // recruitment 정보 삭제
+        const deleteRecruitmentQuery = 'DELETE FROM Recruitments WHERE ProjectId = ?';
+        await db.query(deleteRecruitmentQuery, [projectId]);
+
+        // "waiting" 상태의 멤버 제거
+        const deleteWaitingMembersQuery = 'DELETE FROM Members WHERE ProjectId = ? AND Status = "waiting"';
+        await db.query(deleteWaitingMembersQuery, [projectId]);
+
+        return res.status(200).json({ message: 'Project started successfully.' });
+    } catch (error) {
+        console.error('Error starting project:', error);
+        return res.status(500).json({ message: 'An error occurred while starting the project.' });
+    }
+};
+

@@ -9,6 +9,7 @@ const authRoutes = require('./routes/authRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const recruitmentRoutes = require('./routes/recruitmentRoutes');
 const memberRoutes = require('./routes/memberRoutes');
+const userRoutes = require('./routes/userRoutes');
 const db = require('./config/database');
 const cron = require('node-cron');
 const jwt = require('jsonwebtoken');
