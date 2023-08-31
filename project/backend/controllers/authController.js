@@ -4,22 +4,11 @@ const session = require('express-session');
 const jwt = require('jsonwebtoken');
 const authService = require('../services/authService');
 
-// 테크의 정보를 주기
-exports.getTechStack = (req, res) => {
-    db.query('SELECT tech FROM Tech', (err, techStackData) => {
-        if (err) {
-            console.error('Error fetching tech stack:', err);
-            res.status(500).json({ message: 'Failed to fetch tech stack' });
-        } else {
-            const techStack = techStackData.map(item => item.tech);
-            res.status(200).json({ techStack });
-        }
-    });
-};
-
 // 회원가입
 exports.register = (req, res) => {
     const { name, email, password, type, phone, techs, onOffline } = req.body;
+    let onOffValue = null;
+
     switch (onOffline) {
         case 'online':
             onOffValue = 'ON';
@@ -27,11 +16,8 @@ exports.register = (req, res) => {
         case 'offline':
             onOffValue = 'OFF';
             break;
-        default:
-            onOffValue = null;
-            break;
     }
-    // bcrypt를 이용한 해싱
+
     bcrypt.hash(password, 10, (err, hashedPassword) => {
         if (err) {
             console.error('Error hashing password:', err);
@@ -39,37 +25,19 @@ exports.register = (req, res) => {
             return;
         }
 
-        // Users 테이블에 유저 정보 추가
-        db.query('INSERT INTO Users (Name, Email, Password, CooperationType, Phone, OnOff) VALUES (?, ?, ?, ?, ?, ?);', [name, email, hashedPassword, type, phone, onOffValue], (err, result) => {
-            if (err) {
-                console.error('Error adding user:', err);
-                res.status(500).json({ message: 'Failed to register' });
-                return;
-            }
-            const techsArray = Array.isArray(techs) ? techs : [techs];
-            techsArray.forEach(tech => {
-                db.query('SELECT id FROM Tech WHERE tech = ?;', [tech], (err, dbTechId) => {
-                    if (err) {
-                        console.error('Error getting tech ID:', err);
-                        res.status(500).json({ message: 'Failed to register' });
-                        return;
-                    }
+        db.query('INSERT INTO Users (Name, Email, Password, CooperationType, Phone, Tech, OnOff) VALUES (?, ?, ?, ?, ?, ?, ?);',
+            [name, email, hashedPassword, type, phone, techs, onOffValue], (err, result) => {
+                if (err) {
+                    console.error('Error adding user:', err);
+                    res.status(500).json({ message: 'Failed to register' });
+                    return;
+                }
 
-                    if (dbTechId.length > 0) {
-                        const techID = dbTechId[0].id;
-                        db.query('INSERT INTO UsersTech (UserID, TechID) VALUES (?, ?);', [email, techID], (err, result) => {
-                            if (err) {
-                                console.error('Error adding user tech:', err);
-                            }
-                        });
-                    }
-                });
+                res.redirect('/login');
             });
-
-            res.redirect('/login');
-        });
     });
 };
+
 
 exports.login = (req, res) => {
     const { email, password } = req.body;
