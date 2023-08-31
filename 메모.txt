@@ -1,1 +1,0 @@
-Users에 Name속성에 req.name, Email속성에 req.email, Password 속성에 bcrypt를 이용해 salt를 첨가하여 req.password를 암호화한 값을, CooperationType 속성에 req.type, Phone에 req.phone, techs 배열의 값들의 경우 usertech 테이블에 배열에 해당하는 id값들을 tech테이블에서 가져와 현재 정보를 전달한 유저의 이메일과 함께 id값들을 저장하고 마지막으로 Users테이블의 OnOff속성에는 req.onOffline의 값에 따라 online일 경우 on, offline일 경우 off, 값이 없을 경우 NULL을 저장하는 회원가입 과정을 만들거야.
